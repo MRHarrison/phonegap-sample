@@ -13,12 +13,13 @@
 	-->
 	<!-- If your application is targeting iOS BEFORE 4.0 you MUST put json2.js from http://www.JSON.org/json2.js into your www directory and include it here -->
 
+    <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/jquery.mobile.structure-1.0.min.css" />
         
     <link rel="stylesheet" href="css/aplopay-mobile-v5-3.css" />
-    
-    <script type="text/javascript" charset="utf-8" src="js/phonegap-1.2.0.js"></script>
 
+    <script type="text/javascript" charset="utf-8" src="js/phonegap-1.2.0.js"></script>
+    <script src="http://maps.google.com/maps/api/js?sensor=false" type="text/javascript"></script>	
     <script type="text/javascript" charset="utf-8" src="js/jquery.js"></script>
     <script type="text/javascript" charset="utf-8" src="js/jquery.mobile-1.0.min.js"></script>
 
@@ -64,6 +65,201 @@
        
     
     </script>
+        
+        
+        <script type="text/javascript"> 
+            var directionsDisplay = new google.maps.DirectionsRenderer();
+            var directionsService = new google.maps.DirectionsService();
+            var map;
+            var origin;
+            var destination;
+            var YWSID = "tg6I-0swl3njlgL_gSeF-A";
+            var map = null;
+            var icon = null;
+            
+            
+            function initialize() {
+                var chicago = new google.maps.LatLng(41.850033, -87.6500523);
+                var myOptions = {
+                    zoom:7,
+                    mapTypeId: google.maps.MapTypeId.ROADMAP,
+                    center: chicago
+                }
+                map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+                directionsDisplay.setMap(map);
+                
+                icon = new google.maps.MarkerImage();
+                icon.image =    "images/marker_star.png";
+                icon.shadow =   "images/marker_shadow.png";
+                icon.iconSize = new google.maps.Size(28,29);
+                icon.iconAnchor= new google.maps.Point(15,29);
+                icon.iconWindowAnchor = new google.maps.Point(15,3);
+            }
+            
+            
+            
+            function calcRoute() {
+                var start = document.getElementById("start").value;
+                var end = document.getElementById("end").value;
+                var vehicle = document.getElementById("mode").value;
+                var request = {
+                    origin:start, 
+                    destination:end,
+                    travelMode: google.maps.DirectionsTravelMode[vehicle]
+                };
+                directionsService.route(request, function(response, status) {
+                                        if (status == google.maps.DirectionsStatus.OK) {
+                                        directionsDisplay.setDirections(response);
+                                        }
+                                        });
+            }
+            
+            /* Construct the URL to call for the API request
+             */
+            function constructYelpURL() {
+                var mapBounds = map.getBounds();
+                var URL = "http://api.yelp.com/" +
+                "business_review_search?"+
+                "callback=" + "handleResults" +
+                "&term=" + document.getElementById("term").value + 
+                "&limit=10" +
+                "&tl_lat=" + mapBounds.getSouthWest().lat() +
+                "&tl_long=" + mapBounds.getSouthWest().lng() + 
+                "&br_lat=" + mapBounds.getNorthEast().lat() + 
+                "&br_long=" + mapBounds.getNorthEast().lng() +
+                "&ywsid=" + YWSID;
+                return encodeURI(URL);
+            }
+            
+            /*
+             * Called on the form submission: updates the map by
+             * placing markers on it at the appropriate places
+             */
+            function updateMap() {
+                // turn on spinner animation
+                
+                var yelpRequestURL = constructYelpURL();
+                
+                /* clear existing markers */
+                //map.clearOverlays();
+                
+                /* do the api request */
+                var script = document.createElement('script');
+                script.src = yelpRequestURL;
+                script.type = 'text/javascript';
+                var head = document.getElementsByTagName('head').item(0);
+                head.appendChild(script);
+                return false;
+            }
+            
+            /*
+             * If a sucessful API response is received, place
+             * markers on the map.  If not, display an error.
+             */
+            function handleResults(data) {
+                // turn off spinner animation
+                if(data.message.text == "OK") {
+                    if (data.businesses.length == 0) {
+                        alert("Error: No businesses were found near that location");
+                        return;
+                    }
+                    for(var i=0; i<data.businesses.length; i++) {
+                        biz = data.businesses[i];
+                        createMarker(biz, new google.maps.LatLng(biz.latitude, biz.longitude), i);
+                    }
+                }
+                else {
+                    alert("Error: " + data.message.text);
+                }
+            }
+            
+            /*
+             * Formats and returns the Info Window HTML 
+             * (displayed in a balloon when a marker is clicked)
+             */
+            function infowindowhtml(biz) {
+                var text = '<div class="marker">';
+                
+                // image and rating
+                text += '<img class="businessimage" src="'+biz.photo_url+'"/>';
+                
+                // div start
+                text += '<div class="businessinfo">';
+                // name/url
+                text += '<a href="'+biz.url+'" target="_blank">'+biz.name+'</a><br/>';
+                // stars
+                text += '<img class="ratingsimage" src="'+biz.rating_img_url_small+'"/>&nbsp;based&nbsp;on&nbsp;';
+                // reviews
+                text += biz.review_count + '&nbsp;reviews<br/><br />';
+                // categories
+                text += formatCategories(biz.categories);
+                // neighborhoods
+                if(biz.neighborhoods.length)
+                text += formatNeighborhoods(biz.neighborhoods);
+                // address
+                text += biz.address1 + '<br/>';
+                // address2
+                if(biz.address2.length) 
+                text += biz.address2+ '<br/>';
+                // city, state and zip
+                text += biz.city + ',&nbsp;' + biz.state + '&nbsp;' + biz.zip + '<br/>';
+                // phone number
+                if(biz.phone.length)
+                text += formatPhoneNumber(biz.phone);
+                // Read the reviews
+                text += '<br/><a href="'+biz.url+'" target="_blank">Read the reviews »</a><br/>';
+                // div end
+                text += '</div></div>'
+                return text;
+            }
+            
+            /*
+             * Formats the categories HTML
+             */
+            function formatCategories(cats) {
+                var s = 'Categories: ';
+                for(var i=0; i<cats.length; i++) {
+                    s+= cats[i].name;
+                    if(i != cats.length-1) s += ', ';
+                }
+                s += '<br/>';
+                return s;
+            }
+            
+            /*
+             * Formats the neighborhoods HTML
+             */
+            function formatNeighborhoods(neighborhoods) {
+                s = 'Neighborhoods: ';
+                for(var i=0; i<neighborhoods.length; i++) {
+                    s += '<a href="' + neighborhoods[i].url + '" target="_blank">' + neighborhoods[i].name + '</a>';
+                    if (i != neighborhoods.length-1) s += ', ';
+                }
+                s += '<br/>';
+                return s;
+            }
+            
+            /*
+             * Formats the phone number HTML
+             */
+            function formatPhoneNumber(num) {
+                if(num.length != 10) return '';
+                return '(' + num.slice(0,3) + ') ' + num.slice(3,6) + '-' + num.slice(6,10) + '<br/>';
+            }
+            
+            
+            function createMarker(biz, point, markerNum) {
+                var infowindowhtml = google.maps.InfoWindow(biz)
+                var marker = new google.maps.Marker(point, icon);
+                map.setmap(marker);
+                google.maps.event.addListener(marker, "click", function() {
+                                              marker.InfoWindow.open(infowindowhtml, {maxWidth:400});
+                                              });
+                // automatically open first marker
+                if (markerNum == 0)
+                marker.InfoWindow.open(infowindowhtml, {maxWidth:400});
+            }
+            </script> 
      
         
       
@@ -155,7 +351,7 @@
             
             </script>
   </head>
-  <body onload="onBodyLoad()">
+  <body onload="onBodyLoad(); initialize();" onunload="GUnload();">
       <div data-role="page" id="foo">
           
           <div data-role="header" data-position="fixed">
@@ -171,6 +367,8 @@
               <h3>Samples:</h3>
               
               <a href="#two" data-role="button" data-direction="reverse" data-transition="slideup">Camera</a>	
+              
+              <a href="#map" data-role="button" data-direction="reverse" data-transition="slideup">Map</a>	
               
               <a href="#popup"data-role="button" data-rel="dialog" data-transition="pop">Show page "popup" (as a dialog)</a>
           </div><!-- /content -->
@@ -202,6 +400,43 @@
               <h4>Page Footer</h4>
           </div><!-- /footer -->
       </div><!-- /page two -->
+      
+      
+      <div data-role="page" id="map"> 
+          <div data-role="header">
+              <a href="" data-role="button" class="ui-btn-left">
+                  <span class="ui-btn-text">
+                      Filters
+                  </span>
+              </a>	                              
+              <h1 class="ui-title" role="heading">FoodTrip</h1> 
+          </div>
+          
+          
+          <div data-role="content">
+              
+          
+          <div> 
+              <label for="start">Start</label>
+              <input id="start" type="text" onchange="calcRoute();"/> 
+              <label for="end">End</label>
+              <input id="end" type="text" onchange="calcRoute();"/>
+          </div>
+          <div> 
+              <b>Start: </b> 
+              <select id="mode" onchange="calcRoute();"> 
+                  <option value="DRIVING">Driving</option> 
+                  <option value="WALKING">Walking</option> 
+                  <option value="BICYCLING">Bicycling</option> 
+              </select> 
+          </div> 
+
+              
+              <div id="map_canvas" style="width: 100%; height: 400px; z-index:1"></div> 
+              <div data-role="footer"></div>
+              
+          </div>
+      </div>
       
       
       <!-- Start of third page: #popup -->
